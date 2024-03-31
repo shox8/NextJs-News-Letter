@@ -1,36 +1,63 @@
 "use client";
-import { FormEvent, useRef, useState } from "react";
+
+import { getPlaneKeyframes } from "@/lib/getPlaneKeyframes";
+import { getTrailsKeyframes } from "@/lib/getTrailsKeyframes";
 import { EnvelopeIcon } from "@heroicons/react/24/outline";
 import { CheckIcon, XMarkIcon } from "@heroicons/react/24/solid";
 import { gsap } from "gsap";
-import { getPlaneKeyframes } from "@/lib/getPlaneKeyframes";
-import { getTrailsKeyframes } from "@/lib/getTrailsKeyframes";
+import { FormEvent, useRef, useState } from "react";
 
-export default function NewsletterForm() {
-  const [value, setValue] = useState("");
+type MembersSuccessResponse = {
+  email_address: string;
+};
+
+function NewsletterForm() {
+  const [input, setInput] = useState("");
+  const [successMessage, setSuccessMessage] =
+    useState<MembersSuccessResponse>();
+  const [errorMessage, setErrorMessage] = useState("");
   const [active, setActive] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const { to, fromTo, set } = gsap;
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    const email = value;
+    const email = input;
     const button = buttonRef.current;
 
     if (!email || !button) return;
 
     if (!active) {
       setActive(true);
+
+      to(button, {
+        keyframes: getPlaneKeyframes(set, fromTo, button, setActive, setInput),
+      });
+
+      to(button, { keyframes: getTrailsKeyframes(button) });
     }
 
-    to(button, {
-      keyframes: getPlaneKeyframes(set, fromTo, button, setActive, setValue),
+    const res = await fetch("/api/addSubscription", {
+      body: JSON.stringify({ email }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
     });
+    const data = await res.json();
 
-    to(button, {
-      keyframes: getTrailsKeyframes(button),
-    });
+    if (data.error) {
+      setErrorMessage("Hey, you are already subscribed!");
+      setSuccessMessage(undefined);
+      return;
+    }
+
+    setSuccessMessage(data.res);
+    setErrorMessage("");
+  };
+
+  const dismissMessages = () => {
+    setSuccessMessage(undefined);
+    setErrorMessage("");
   };
 
   return (
@@ -42,8 +69,8 @@ export default function NewsletterForm() {
         <div className="group flex items-center gap-x-4 py-1 pl-4 pr-1 rounded-[9px] bg-[#090D11] hover:bg-[#15141B] shadow-outline-gray hover:shadow-transparent focus-within:bg-[#15141B] focus-within:!shadow-outline-gray-focus transition-all duration-300">
           <EnvelopeIcon className="hidden sm:inline w-6 h-6 text-[#4B4C52] group-focus-within:text-white group-hover:text-white transition-colors duration-300" />
           <input
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
             placeholder="Email address"
             required
             type="email"
@@ -51,8 +78,10 @@ export default function NewsletterForm() {
           />
           <button
             ref={buttonRef}
-            className={`disabled:!bg-[#17141F] disabled:grayscale-[65%] disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base`}
-            disabled={!value}
+            className={`${
+              active && "active"
+            } disabled:!bg-[#17141F] disabled:grayscale-[65%] disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base`}
+            disabled={!input}
             type="submit"
           >
             <span className="default">Subscribe</span>
@@ -73,6 +102,38 @@ export default function NewsletterForm() {
           </button>
         </div>
       </form>
+
+      <div className="relative">
+        {(successMessage || errorMessage) && (
+          <div className="flex items-start space-x-2 bg-[#0A0E12] shadow-outline-gray text-white rounded-[9px] py-4 px-6 animate-fade-bottom absolute">
+            <div className="h-6 w-6 bg-[#1B2926] flex items-center justify-center rounded-full border border-[#273130] flex-shrink-0">
+              <CheckIcon className="h-4 w-4 text-[#81A89A]" />
+            </div>
+            <div className="text-xs sm:text-sm text-[#4B4C52]">
+              {successMessage ? (
+                <p>
+                  We&apos;ve added{" "}
+                  <span className="text-[#ADB0B1]">
+                    {successMessage.email_address}
+                  </span>{" "}
+                  to our waitlist. We&apos;ll let you know when we launch!
+                </p>
+              ) : (
+                <p>
+                  You are already added to our waitlist. We&apos;ll let you know
+                  when we launch!
+                </p>
+              )}
+            </div>
+            <XMarkIcon
+              className="h-5 w-5 cursor-pointer flex-shrink-0 text-[#4A4B55]"
+              onClick={dismissMessages}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+
+export default NewsletterForm;
